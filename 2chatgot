@@ -1,0 +1,249 @@
+import React, { useState, useEffect } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Modal, ScrollView, AppState } from "react-native";
+
+// Mini-games definitions
+const games = [
+  {id:1,name:"Catch Stars", type:"tap"},
+  {id:2,name:"Memory Match", type:"memory"},
+  {id:3,name:"Quick Quiz", type:"quiz"},
+  {id:4,name:"Color Match", type:"color"},
+  {id:5,name:"Counting Game", type:"count"},
+  {id:6,name:"Balloon Pop", type:"balloon"},
+  {id:7,name:"Shape Match", type:"shape"},
+  {id:8,name:"Reaction Tap", type:"reaction"},
+  {id:9,name:"Pattern Trace", type:"pattern"},
+  {id:10,name:"Puzzle Slider", type:"puzzle"}
+];
+
+export default function App() {
+  // LOGIN & USER
+  const [email,setEmail]=useState("");
+  const [password,setPassword]=useState("");
+  const [storedPassword,setStoredPassword]=useState(null);
+  const [firstLogin,setFirstLogin]=useState(true);
+  const [loggedIn,setLoggedIn]=useState(false);
+
+  // DASHBOARD & MODES
+  const [mode,setMode]=useState("child"); // child / parent
+  const [showPasswordModal,setShowPasswordModal]=useState(false);
+  const [verifyPassword,setVerifyPassword]=useState("");
+
+  // CHILD INFO
+  const [childAge,setChildAge]=useState("");
+  const [childClass,setChildClass]=useState("");
+
+  // TIMERS
+  const [readingTime,setReadingTime]=useState(0);
+  const [sleepTime,setSleepTime]=useState(0);
+  const [outingTime,setOutingTime]=useState(0);
+
+  // MINI-GAMES
+  const [selectedGame,setSelectedGame]=useState(null);
+  const [score,setScore]=useState(0);
+
+  // CHILD PROTECTION
+  const [appState, setAppState] = useState(AppState.currentState);
+  const [failedAttempts, setFailedAttempts] = useState([]);
+  const [lockout, setLockout] = useState(false);
+  const [lockTime, setLockTime] = useState(0);
+
+  // TIMERS EFFECTS
+  useEffect(()=>{if(readingTime>0)setTimeout(()=>setReadingTime(readingTime-1),1000)},[readingTime]);
+  useEffect(()=>{if(sleepTime>0)setTimeout(()=>setSleepTime(sleepTime-1),1000)},[sleepTime]);
+  useEffect(()=>{if(outingTime>0)setTimeout(()=>setOutingTime(outingTime-1),1000)},[outingTime]);
+
+  // APPSTATE WARNING
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", nextAppState => {
+      if(appState.match(/active/) && nextAppState.match(/inactive|background/) && mode==="child") {
+        Alert.alert("Stop!", "You cannot leave the app without parent's permission.");
+      }
+      setAppState(nextAppState);
+    });
+    return () => subscription.remove();
+  }, [appState, mode]);
+
+  // LOCKOUT TIMER
+  useEffect(()=>{
+    let timer;
+    if(lockout && lockTime>0){
+      timer = setInterval(()=>setLockTime(prev=>prev-1),1000);
+    } else if(lockout && lockTime===0){
+      setLockout(false);
+      setFailedAttempts([]);
+    }
+    return ()=> clearInterval(timer);
+  },[lockout,lockTime]);
+
+  const startTimer=(type)=>{
+    if(type==="reading")setReadingTime(3600);
+    if(type==="sleep")setSleepTime(3600);
+    if(type==="outing")setOutingTime(3600);
+  };
+
+  const formatTime=(seconds)=>{
+    const hrs=Math.floor(seconds/3600);
+    const mins=Math.floor((seconds%3600)/60);
+    const secs=seconds%60;
+    return `${hrs.toString().padStart(2,'0')}:${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
+  };
+
+  const playGame = (gameType) => setScore(score+1);
+
+  // OPEN GAME WITH TIMER LOCK CHECK
+  const openGame = (game) => {
+    if(readingTime>0){
+      Alert.alert("Reading Time","You cannot play games while reading timer is active.");
+      return;
+    }
+    if(sleepTime>0){
+      Alert.alert("Sleep Time","You cannot play games while sleep timer is active.");
+      return;
+    }
+    setSelectedGame(game);
+    setScore(0);
+  };
+
+  // LOGIN SCREEN
+  if(!loggedIn){
+    return(
+      <View style={styles.container}>
+        <Text style={styles.title}>2ChatGot Parent Login</Text>
+        <TextInput style={styles.input} placeholder="Enter your email" value={email} onChangeText={setEmail}/>
+        {firstLogin && <>
+          <TextInput style={styles.input} placeholder="Set password" secureTextEntry value={password} onChangeText={setPassword}/>
+          <TextInput style={styles.input} placeholder="Child's Age" keyboardType="numeric" value={childAge} onChangeText={setChildAge}/>
+          <TextInput style={styles.input} placeholder="Child Class" value={childClass} onChangeText={setChildClass}/>
+        </>}
+        {!firstLogin && <TextInput style={styles.input} placeholder="Enter password" secureTextEntry value={password} onChangeText={setPassword}/>}
+
+        <TouchableOpacity style={styles.button} onPress={()=>{
+          if(firstLogin){
+            if(!email||!password||!childAge||!childClass) return Alert.alert("Error","Fill all fields");
+            setStoredPassword(password);
+            setFirstLogin(false);
+            setLoggedIn(true);
+          }else{
+            if(password===storedPassword) setLoggedIn(true);
+            else Alert.alert("Error","Wrong password");
+          }
+        }}>
+          <Text style={styles.buttonText}>{firstLogin?"Set Password & Login":"Login"}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // CHILD GAME SCREEN
+  if(selectedGame && mode==="child"){
+    return(
+      <View style={styles.container}>
+        <Text style={styles.title}>{selectedGame.name}</Text>
+        <Text style={{color:"#ffd166",fontSize:18,marginVertical:5}}>Score: {score}</Text>
+        <TouchableOpacity onPress={()=>playGame(selectedGame.type)} style={styles.star}>
+          <Text style={{fontSize:24}}>Play Game!</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.button,{marginTop:20}]} onPress={()=>{setSelectedGame(null); setScore(0);}}>
+          <Text style={styles.buttonText}>Back to Games</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // DASHBOARD SCREEN
+  return(
+    <View style={styles.container}>
+      <Text style={styles.title}>2ChatGot Dashboard</Text>
+      <Text style={styles.text}>Child: {childAge} yrs, Class: {childClass}</Text>
+      <Text style={styles.text}>Mode: {mode.toUpperCase()}</Text>
+
+      {mode==="child" && <TouchableOpacity style={styles.smallButton} onPress={()=>setShowPasswordModal(true)}>
+        <Text style={styles.smallText}>Switch to Parent Mode</Text>
+      </TouchableOpacity>}
+      {mode==="parent" && <TouchableOpacity style={styles.smallButton} onPress={()=>{setMode("child"); setScore(0); setSelectedGame(null);}}>
+        <Text style={styles.smallText}>Switch to Child Mode</Text>
+      </TouchableOpacity>}
+
+      {/* TIMERS */}
+      <TouchableOpacity style={styles.smallButton} onPress={()=>startTimer("reading")}><Text style={styles.smallText}>Start Reading Timer</Text></TouchableOpacity>
+      {readingTime>0 && <Text style={styles.timer}>⏳ Reading: {formatTime(readingTime)}</Text>}
+      <TouchableOpacity style={styles.smallButton} onPress={()=>startTimer("sleep")}><Text style={styles.smallText}>Start Sleep Timer</Text></TouchableOpacity>
+      {sleepTime>0 && <Text style={styles.timer}>⏳ Sleep: {formatTime(sleepTime)}</Text>}
+      <TouchableOpacity style={styles.smallButton} onPress={()=>startTimer("outing")}><Text style={styles.smallText}>Start Outing Timer</Text></TouchableOpacity>
+      {outingTime>0 && <Text style={styles.timer}>⏳ Outing: {formatTime(outingTime)}</Text>}
+
+      {/* Child Mode Games */}
+      {mode==="child" && <ScrollView style={{marginTop:20,width:"100%"}}>
+        {games.map(game=>(
+          <TouchableOpacity key={game.id} style={styles.smallButton} onPress={()=>openGame(game)}>
+            <Text style={styles.smallText}>{game.name}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>}
+
+      {/* Failed Attempts in Parent Mode */}
+      {mode==="parent" && <>
+        <Text style={{marginTop:20,fontSize:18,fontWeight:"bold"}}>Failed Attempts:</Text>
+        {failedAttempts.length===0 && <Text>No failed attempts yet.</Text>}
+        {failedAttempts.map((item,index)=>(
+          <Text key={index}>❌ {item}</Text>
+        ))}
+      </>}
+
+      {/* PASSWORD MODAL */}
+      <Modal visible={showPasswordModal} transparent animationType="slide">
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Enter Parent Password</Text>
+            <TextInput style={styles.input} placeholder="Password" secureTextEntry value={verifyPassword} onChangeText={setVerifyPassword}/>
+            <TouchableOpacity style={styles.button} onPress={()=>{
+              if(lockout){
+                Alert.alert("Locked","Try again in "+lockTime+" seconds");
+                return;
+              }
+
+              if(verifyPassword===storedPassword){ 
+                setMode("parent"); 
+                setShowPasswordModal(false); 
+                setVerifyPassword(""); 
+                setFailedAttempts([]);
+              } else {
+                const time = new Date().toLocaleString();
+                setFailedAttempts([...failedAttempts, time]);
+                const wrongCount = failedAttempts.length + 1;
+                if(wrongCount>=3){
+                  setLockout(true);
+                  setLockTime(60);
+                  Alert.alert("Locked","Too many attempts! Try again in 60 seconds.");
+                } else {
+                  Alert.alert("Error","Wrong password");
+                }
+              }
+            }}>
+              <Text style={styles.buttonText}>Verify</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.button,{backgroundColor:"#ff4c4c"}]} onPress={()=>{setShowPasswordModal(false); setVerifyPassword("");}}>
+              <Text style={styles.buttonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container:{flex:1,justifyContent:"center",alignItems:"center",padding:20},
+  title:{fontSize:28,color:"#000",fontWeight:"bold",marginBottom:20,textAlign:"center"},
+  text:{color:"#000",fontSize:16,marginVertical:5,textAlign:"center"},
+  input:{backgroundColor:"#fff",width:"80%",padding:10,borderRadius:8,marginVertical:5},
+  button:{backgroundColor:"#5bc0be",padding:16,borderRadius:12,width:"60%",marginVertical:10},
+  buttonText:{fontSize:18,textAlign:"center",fontWeight:"600"},
+  smallButton:{backgroundColor:"#3a86ff",padding:12,borderRadius:10,width:"80%",marginVertical:5},
+  smallText:{color:"#fff",textAlign:"center"},
+  timer:{color:"#ffd166",fontSize:18,marginVertical:5},
+  modalContainer:{flex:1,justifyContent:"center",alignItems:"center",backgroundColor:"rgba(0,0,0,0.7)"},
+  modalContent:{width:"80%",backgroundColor:"#fff",borderRadius:12,padding:20,alignItems:"center"},
+  modalTitle:{fontSize:20,fontWeight:"bold",marginBottom:10},
+  star:{backgroundColor:"#ffda79",margin:5,padding:15,borderRadius:10,alignItems:"center"}
+});
